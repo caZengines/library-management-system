@@ -1,15 +1,5 @@
 // ===========================================================================
-//  borrow_manager.h  ——  图书借阅管理者（组合关系 + 依赖关系的汇合点）
-//  ---------------------------------------------------------------------------
-//  ★ 类间关系说明（答辩重点）★
-//   组合关系（Composition）：BorrowManager "拥有" 学生表与图书表，
-//        成员为 std::vector<Student> / std::vector<Book>（按值持有），
-//        管理者析构时学生/图书对象随之销毁，生命周期完全由管理者控制，
-//        因此是强组合（实心菱形 ◄◆）。
-//   依赖关系（Dependency）：借书动作 borrow_book(Student&, Book&)
-//        以【引用】传参，并且把 Book* 存入学生的借阅清单，
-//        参数与局部数据都指向外部对象——管理者不拥有 Book，
-//        只在使用期间依赖它（虚线箭头 ┄>）。
+//  borrow_manager.h  ——  图书借阅管理者
 // ===========================================================================
 #pragma once
 
@@ -22,7 +12,7 @@
 
 namespace borrow {
 
-// 统一的业务返回结果：是否成功 + 提示信息（避免到处打印，便于测试）
+// 统一返回结果：是否成功 + 提示信息
 struct Result {
     bool ok{false};
     std::string message;
@@ -30,7 +20,7 @@ struct Result {
     static Result failure(std::string text) { return Result{false, std::move(text)}; }
 };
 
-// 归还结果：额外带回逾期天数与罚款
+// 归还结果
 struct ReturnResult {
     bool ok{false};
     std::string message;
@@ -42,7 +32,7 @@ class BorrowManager {
 public:
     BorrowManager() = default;
 
-    // ---------------------------- 组合：持有对象 ----------------------------
+    // ---------------------------- 组合----------------------------
     // 图书入库 / 学生注册（管理者拥有这些对象）
     void add_book(const Book& book);
     void add_student(const Student& student);
@@ -57,10 +47,6 @@ public:
     const std::vector<Student>& students() const noexcept { return students_; }
 
     // ---------------------------- 依赖：借书 ----------------------------
-    // 借书：学生与图书均以【引用】传入（体现依赖关系）
-    // 校验：①学生状态（能否再借、是否重复借同一本）
-    //       ②图书状态（是否可借）
-    //       两者都满足才借书成功，并同步改变两边状态
     Result borrow_book(Student& student, Book& book, const Date& date);
 
     // ---------------------------- 依赖：还书 ----------------------------
@@ -81,8 +67,8 @@ public:
     void save(const std::string& dir) const;
 
 private:
-    std::vector<Book> books_;        // 组合：图书由管理者拥有
-    std::vector<Student> students_;  // 组合：学生由管理者拥有
+    std::vector<Book> books_;        // 图书由管理者拥有
+    std::vector<Student> students_;  // 学生由管理者拥有
     Date today_{Date::today()};
 };
 
