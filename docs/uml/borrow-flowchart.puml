@@ -1,0 +1,80 @@
+@startuml 学生借书-借书核心函数流程图
+' ===========================================================================
+'  组合依赖关系设计报告 —— 核心函数 borrow_book 的执行流程图
+'  渲染：java -jar plantuml.jar -Playout=smetana -tsvg docs/uml/borrow-flowchart.puml
+' ===========================================================================
+skinparam dpi 110
+skinparam shadowing false
+skinparam ArrowColor #455A64
+skinparam activity {
+  BackgroundColor #FDFDFD
+  BorderColor #37474F
+  DiamondBackgroundColor #FFF8E1
+  DiamondBorderColor #F9A825
+  FontSize 12
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+}
+
+title 核心函数流程图 —— BorrowManager::borrow_book(Student&, Book&, const Date&)
+
+start
+
+:接收参数：student（学生引用）、book（图书引用）、date（借书日期）;
+note right
+  ★ 参数以【引用】传递：体现"学生借书"
+  这一动作对图书对象的【依赖关系】
+end note
+
+' ---------------- 校验一：学生状态 ----------------
+if (student.can_borrow_more() 成立？\n即"已借数量 < 最大借阅数量") then (否)
+  :返回 Result::failure("已达最大借阅数量");
+  stop
+else (是)
+  :继续校验;
+endif
+
+' ---------------- 校验二：是否重复借同一本 ----------------
+if (student.has_borrowed(book.isbn()) 成立？) then (是)
+  :返回 Result::failure("不能重复借同一本书");
+  stop
+else (否)
+  :继续校验;
+endif
+
+' ---------------- 校验三：图书状态 ----------------
+if (book.borrowable() 成立？\n即在馆册数 > 0) then (否)
+  :返回 Result::failure("图书已全部借出");
+  stop
+else (是)
+  :两项状态均允许，执行借阅;
+endif
+
+note right
+  学生状态与图书状态必须
+  同时允许，才可借书成功
+end note
+
+' ---------------- 状态同步变更 ----------------
+:due_date = date.add_days(Student::kBorrowDays)
+计算应还日期（借期 30 天）;
+
+:book.take_one()
+图书状态：在馆册数 -1，累计借出次数 +1;
+
+:student.add_borrowed_item(&book, date, due_date)
+学生状态：借阅清单新增一条（保存 Book*）;
+
+note right
+  借阅成功时双方状态同步改变：
+  图书由"可借"变为"在馆册数减少"，
+  学生"已借数量 +1"
+end note
+
+:返回 Result::success("借书成功 + 应还日期");
+
+stop
+
+@enduml

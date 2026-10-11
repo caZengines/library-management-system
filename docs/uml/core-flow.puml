@@ -1,0 +1,107 @@
+@startuml 图书馆借阅管理系统-借还时序图
+' ===========================================================================
+'  核心业务时序图：借书四项校验、还书逾期罚款的逐步消息流
+'  渲染：java -jar plantuml.jar -Playout=smetana -tsvg docs/uml/core-flow.puml
+' ===========================================================================
+skinparam dpi 110
+skinparam shadowing false
+skinparam maxMessageSize 130
+skinparam sequenceMessageAlign left
+skinparam ArrowColor #455A64
+skinparam ParticipantBackgroundColor #ECEFF1
+skinparam ParticipantBorderColor #37474F
+skinparam sequence {
+  LifeLineBorderColor #90A4AE
+  ActorBorderColor #37474F
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+}
+
+title 核心业务时序图 —— 借书校验 与 还书逾期罚款
+
+actor "管理员 / 读者" as User0
+participant "Cli\n(界面层)" as Cli
+participant "BorrowService\n(业务层)" as Svc
+participant "users_ / books_ /\nrecords_ 仓储" as Repo
+participant "Date / FinePolicy\n(工具层)" as Util
+
+== 场景一：借书（四项校验 + 自动算应还日） ==
+User0 -> Cli : 借书(借阅人编号, 图书条码号)
+Cli -> Svc : borrow_book(user_id, barcode)
+activate Svc
+
+Svc -> Repo : find_user(user_id)
+Repo --> Svc : User*
+note right of Svc
+  ① 借阅人必须存在
+end note
+
+Svc -> Repo : find_book(barcode)
+Repo --> Svc : Book*
+note right of Svc
+  ② 图书必须存在
+end note
+
+Svc -> Svc : book->borrowable()
+note right of Svc
+  ③ 图书必须"可借"
+  （已借出则拒绝）
+end note
+
+Svc -> Repo : active_count_of_user(user_id)
+Repo --> Svc : int 已借数量
+Svc -> Svc : 已借数量 < user->max_borrow()
+note right of Svc
+  ④ 未超过最大借阅数量
+  （学生 5 本 / 教师 10 本）
+end note
+
+Svc -> Svc : user->borrow_days()
+note right of Svc
+  借期：学生 30 天 / 教师 60 天（虚函数多态）
+end note
+Svc -> Util : borrow_date.add_days(days)
+Util --> Svc : due_date 应还日期
+Svc -> Repo : books_.update(可借=false, 借次+1)
+Svc -> Repo : records_.add(BorrowRecord)
+note right of Svc
+  写入顺序：先改图书状态，最后写记录；
+  抛异常则 reload() 从文件恢复，保证数据一致
+end note
+Svc --> Cli : BorrowResult{记录号, 借书日, 应还日, 日单价}
+deactivate Svc
+Cli --> User0 : 打印"借书成功 + 应还日期"
+
+== 场景二：还书（逾期判定 + 罚款结算） ==
+User0 -> Cli : 还书(记录号 / 条码号, 归还日期)
+Cli -> Svc : preview_fine(record, return_date)
+activate Svc
+Svc -> Repo : find_user(record.user_id())
+Repo --> Svc : User*
+Svc -> Svc : user->fine_policy()
+Svc -> Util : settle_fine(due_date, return_date, policy)
+Util --> Svc : FineResult{逾期天数, 罚款}
+deactivate Svc
+Cli --> User0 : 预览"已逾期 N 天，应缴 X 元"并请求确认
+
+User0 -> Cli : 确认归还
+Cli -> Svc : return_book(record_id, return_date)
+activate Svc
+Svc -> Util : days_until() / settle_fine()
+Util --> Svc : 罚款金额
+Svc -> Repo : records_.update(已归还, 归还日, 罚款)
+Svc -> Repo : books_.update(可借=true)
+Svc --> Cli : Result{成功, "逾期N天，罚款X元"}
+deactivate Svc
+Cli --> User0 : 打印还书结果，图书恢复"可借"
+
+note over Svc
+  【逾期判定规则】
+  未归还 且 (归还日 或 系统当天) > 应还日  =>  逾期
+  罚款 = 逾期天数 × 日单价（学生 0.20 元/天，教师 0.50 元/天）
+  未归还记录在"逾期清单"中按系统当天实时预览，不写盘。
+end note
+
+@enduml

@@ -67,3 +67,26 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# ---------------------------------------------------------------------------
+# 本项目专用
+# ---------------------------------------------------------------------------
+# CMake / clangd 构建目录（本机使用 build/ 与 cmake-build/）
+cmake-build/
+.clangd
+.cache/
+
+# PlantUML 渲染工具（30MB，不入库；图源 .puml 与渲染产物已入库）
+plantuml*.jar
+
+# 旧的图书馆系统代码暂存目录（本阶段不提交）
+src-temp/
+
+# 实验报告模板与 Word 临时文件
+ahw_*.docx
+~$*.docx
+
+# 报告生成与调试用的临时脚本、运行数据
+tmp-tools/
+test.puml
+data/*.txt

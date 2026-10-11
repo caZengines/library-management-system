@@ -1,0 +1,163 @@
+@startuml 学生借书-类图
+' ===========================================================================
+'  组合依赖关系设计报告 —— 类图（重点表达组合关系与依赖关系）
+'  渲染：java -jar plantuml.jar -Playout=smetana -tsvg docs/uml/borrow-class-diagram.puml
+' ===========================================================================
+skinparam dpi 110
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype polyline
+skinparam nodesep 40
+skinparam ranksep 46
+skinparam ArrowColor #455A64
+skinparam class {
+  BackgroundColor #FDFDFD
+  BorderColor #37474F
+  HeaderBackgroundColor #ECEFF1
+  AttributeFontSize 12
+  FontSize 13
+}
+skinparam note {
+  BackgroundColor #FFFDE7
+  BorderColor #FBC02D
+}
+
+title 学生借书 —— 类图（组合关系 ◆—— 与 依赖关系 ┄┄>）
+
+' ============================ 管理者：组合的"整体" ============================
+class BorrowManager <<管理者·组合关系的整体>> {
+  - vector<Book> books_        ' 组合：按值持有图书
+  - vector<Student> students_  ' 组合：按值持有学生
+  - Date today_                ' 系统日期
+  --
+  + add_book(book : const Book&) : void
+  + add_student(student : const Student&) : void
+  + find_book(isbn : const string&) : Book*
+  + find_student(id : const string&) : Student*
+  + books() : const vector<Book>&
+  + students() : const vector<Student>&
+  --
+  + borrow_book(student : Student&, book : Book&, date : const Date&) : Result
+  + return_book(student : Student&, isbn : const string&, date : const Date&) : ReturnResult
+  + overdue_days(student : const Student&, isbn : const string&, date : const Date&) : long long
+  + preview_fine(student : const Student&, isbn : const string&, date : const Date&) : double
+  --
+  + today() : const Date&
+  + set_today(date : const Date&) : void
+  + advance_days(days : long long) : Date
+  + load(dir : const string&) : void
+  + save(dir : const string&) : void
+}
+
+' ============================ 学生：被管理者持有，依赖图书 ============================
+class Student <<学生>> {
+  + {static} kDefaultMaxBorrow = 5     ' 最大借阅数量
+  + {static} kBorrowDays = 30          ' 借期（天）
+  + {static} kFinePerDay = 0.20        ' 逾期罚款（元/天）
+  - string id_                         ' 学号
+  - string name_                       ' 姓名
+  - string major_                      ' 专业
+  - int max_borrow_ = 5                ' 最大借阅数量
+  - vector<BorrowItem> borrowed_       ' 借阅清单（学生 → 图书 的数据关联）
+  - double total_fine_ = 0.0           ' 累计罚款
+  --
+  + id() / name() / major() : const string&
+  + max_borrow() : int
+  + set_name() / set_major() / set_max_borrow() : void
+  + borrowed() : const vector<BorrowItem>&
+  + borrowed_count() : int
+  + can_borrow_more() : bool            ' 学生状态判断：能否再借
+  + has_borrowed(isbn : const string&) : bool   ' 是否已借过该书
+  + add_borrowed_item(book : Book*, borrow_date, due_date) : void
+  + remove_borrowed_item(isbn : const string&) : bool
+  + find_item(isbn : const string&) : const BorrowItem*
+  + total_fine() : double
+  + add_fine(amount : double) : void
+  + to_string() : string
+}
+
+class "Student::BorrowItem" as BorrowItem <<嵌套结构体>> {
+  + Book* book             ' 指向所借图书（不拥有所有权）
+  + Date borrow_date       ' 借书日期
+  + Date due_date          ' 应还日期
+}
+
+' ============================ 图书：被管理者持有，被学生"使用" ============================
+class Book <<图书>> {
+  - string isbn_           ' 图书号
+  - string title_          ' 书名
+  - string author_         ' 作者
+  - int total_ = 1         ' 馆藏总册数
+  - int available_ = 1     ' 在馆（可借）册数
+  - int borrow_count_ = 0  ' 累计借出次数
+  --
+  + isbn() / title() / author() : const string&
+  + total() / available() / borrow_count() : int
+  + set_title() / set_author() : void
+  + set_total(value : int) / set_available(value : int) : void
+  + borrowable() : bool            ' 图书状态判断：在馆 > 0
+  + status_text() : string
+  + take_one() : bool              ' 借出：在馆 -1（核心算法）
+  + give_one() : bool              ' 归还：在馆 +1（核心算法）
+  + add_copies(count : int) : void ' 补充馆藏
+  + to_string() : string
+}
+
+' ============================ 工具类 ============================
+class Date <<值类型>> {
+  - int year_ / month_ / day_
+  + {static} today() : Date
+  + {static} parse(text, out) : bool
+  + to_string() : string
+  + to_days() : long long
+  + add_days(days : long long) : Date
+  + days_until(other : Date) : long long
+}
+
+class Result <<返回值>> {
+  + bool ok
+  + string message
+  + {static} success(text) : Result
+  + {static} failure(text) : Result
+}
+
+class ReturnResult <<返回值>> {
+  + bool ok
+  + string message
+  + long long overdue_days
+  + double fine
+}
+
+' ============================ 关系 ============================
+' 1) 组合关系：管理者按值持有图书与学生，生命周期完全由管理者控制
+BorrowManager *-- "1..*" Book : 组合（整体-部分）
+BorrowManager *-- "1..*" Student : 组合（整体-部分）
+
+' 2) 嵌套结构：学生内部保存借阅条目
+Student *-- "0..*" BorrowItem : 嵌套组合
+
+' 3) 依赖关系：借书动作以【引用/指针】使用图书对象，学生不拥有图书
+BorrowItem --> "1" Book : 关联 Book*（只借用不销毁）
+BorrowManager ..> Book : 依赖（borrow_book 传 Book&）
+BorrowManager ..> Student : 依赖（borrow_book 传 Student&）
+BorrowManager ..> Date : 依赖
+BorrowManager ..> Result : 返回
+BorrowManager ..> ReturnResult : 返回
+Student ..> Date : 依赖（借书日/应还日）
+
+note right of BorrowManager
+  【组合关系】
+  管理者用 vector<Book> / vector<Student>
+  按值持有对象：对象随管理者创建而创建、
+  随管理者析构而析构，是强组合（实心菱形）。
+end note
+
+note bottom of BorrowItem
+  【依赖关系】
+  borrow_book(Student&, Book&) 用引用传参，
+  并把 Book* 登记进学生的借阅清单：
+  学生只是"使用"图书，不负责图书的生死。
+  因此 Book* 不 delete，图书由管理者销毁。
+end note
+
+@enduml
