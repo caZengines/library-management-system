@@ -1,9 +1,18 @@
 // ===========================================================================
 //  book.h  ——  图书类
+//  ---------------------------------------------------------------------------
+//  实验归属：
+//   【实验3·继承与派生】Book 作为独立的"被借阅对象"，与 User 体系协作；
+//                       借阅记录中用 Book* 表示"学生 → 图书"的关系。
+//   【实验6·输入输出流】operator<< / operator>> 重载，
+//                       以及 serialize()/parse() 供文件流持久化使用。
 // ===========================================================================
 #pragma once
 
+#include <iosfwd>
+#include <optional>
 #include <string>
+#include <string_view>
 
 namespace borrow {
 
@@ -19,6 +28,8 @@ public:
           available_(available) {}
 
     // ---------------------------- 基本信息 ----------------------------
+    // id() 即ISBN码
+    const std::string& id() const noexcept { return isbn_; }
     const std::string& isbn() const noexcept { return isbn_; }
     const std::string& title() const noexcept { return title_; }
     const std::string& author() const noexcept { return author_; }
@@ -33,23 +44,26 @@ public:
     void set_borrow_count(int count) { borrow_count_ = count; }
 
     // ---------------------------- 状态查询 ----------------------------
-    // 是否可借：在馆册数 > 0
     bool borrowable() const noexcept { return available_ > 0; }
     std::string status_text() const;
 
     // ---------------------------- 状态修改 ----------------------------
-    // 借出：在馆册数 -1，借阅次数 +1（由借书逻辑在"状态允许"后调用）
-    bool take_one();
-    // 归还：在馆册数 +1（不允许超过总册数）
-    bool give_one();
-    // 补充馆藏
-    void add_copies(int count);
+    bool take_one();                 // 借出：在馆册数 -1，借出次数 +1
+    bool give_one();                 // 归还：在馆册数 +1
+    void add_copies(int count);      // 补充馆藏
 
-    // 输出一行信息
+    // ---------------------------- 序列化 ----------------------------
+    // 一行文本：ISBN|书名|作者|总册数|在馆册数|借出次数
+    [[nodiscard]] std::string serialize() const;
+    [[nodiscard]] static std::optional<Book> parse(std::string_view line);
     std::string to_string() const;
 
+    // 【实验6·输入输出流】流运算符重载
+    friend std::ostream& operator<<(std::ostream& out, const Book& book);
+    friend std::istream& operator>>(std::istream& in, Book& book);
+
 private:
-    std::string isbn_;          // 图书号
+    std::string isbn_;          // 图书号（主键）
     std::string title_;         // 书名
     std::string author_;        // 作者
     int total_{1};              // 馆藏总册数
