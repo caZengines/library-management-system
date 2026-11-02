@@ -62,7 +62,6 @@ void Book::add_copies(int count) {
 }
 
 // ---------------------------------------------------------------------------
-//  【实验6·输入输出流】序列化：把对象写成一行的文本表示
 //  文件持久化时由 std::ofstream << serialize() 输出，读取时用 parse() 还原。
 // ---------------------------------------------------------------------------
 std::string Book::serialize() const {
@@ -90,7 +89,6 @@ std::string Book::to_string() const {
 }
 
 // ===========================================================================
-//  【实验6·输入输出流】Book 的流运算符重载
 //  ---------------------------------------------------------------------------
 //  operator<<：输出一行人类可读的图书摘要（可写 cout / ofstream / ostringstream）
 //  operator>>：从输入流中依次读取"非注释、非空"的数据行，
@@ -105,14 +103,13 @@ std::istream& operator>>(std::istream& in, Book& book) {
     std::string line;
     while (std::getline(in, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();  // 兼容 Windows 换行
-        if (line.empty() || line.front() == '#') continue;          // 跳过注释与空行
+        if (line.empty() || line.front() == '#') continue;          
         if (auto parsed = Book::parse(line)) {
             book = std::move(*parsed);
             return in;
         }
-        // 该行损坏：跳过并继续读取下一行
     }
-    in.setstate(std::ios::failbit);  // 到达文件末尾/无有效数据
+    in.setstate(std::ios::failbit); 
     return in;
 }
 
