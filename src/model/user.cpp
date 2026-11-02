@@ -15,7 +15,6 @@
 namespace borrow {
 namespace {
 
-// 字段转 int / double（文件可能被手工改坏，解析失败返回 nullopt）
 std::optional<int> to_int(const std::string& text) {
     try {
         std::size_t used = 0;
@@ -47,7 +46,6 @@ User::User(std::string id, std::string name, std::string department)
     : id_(std::move(id)), name_(std::move(name)), department_(std::move(department)) {}
 
 bool User::has_borrowed(const std::string& isbn) const noexcept {
-    // 【实验5·模板使用】std::ranges 算法复用：对任意容器都能按条件判断
     return std::ranges::any_of(borrowed_, [&isbn](const BorrowItem& item) {
         return item.book != nullptr && item.book->isbn() == isbn;
     });

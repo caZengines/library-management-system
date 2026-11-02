@@ -1,5 +1,5 @@
 // ===========================================================================
-//  user.h  ——  用户体系（抽象基类 User + 派生类 Student / Teacher）
+//  user.h  ——  用户体系
 //  ---------------------------------------------------------------------------
 //       - User 是抽象基类，抽取学号/工号、姓名、院系、借阅清单等公共属性；
 //       - Student / Teacher 公有派生，各自扩展专业年级 / 职称；
@@ -18,15 +18,15 @@
 
 namespace borrow {
 
-class Book;  // 前向声明
+class Book;
 
 class User {
 public:
-    // 借阅条目：一本书 + 借书日 + 应还日
+    // 借阅条目：书 + 借书日 + 应还日
     struct BorrowItem {
-        Book* book{nullptr};   // 指向被借图书（不拥有所有权）
-        Date borrow_date{};    // 借书日期
-        Date due_date{};       // 应还日期
+        Book* book{nullptr};  
+        Date borrow_date{};    
+        Date due_date{};   
     };
 
     User(std::string id, std::string name, std::string department);
