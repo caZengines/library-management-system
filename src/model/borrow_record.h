@@ -63,7 +63,7 @@ public:
     [[nodiscard]] static std::optional<BorrowRecord> parse(std::string_view line);
     std::string to_string() const;
 
-    // 【实验6·输入输出流】流运算符
+    // 流运算符
     friend std::ostream& operator<<(std::ostream& out, const BorrowRecord& record);
     friend std::istream& operator>>(std::istream& in, BorrowRecord& record);
 
