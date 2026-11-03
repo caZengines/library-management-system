@@ -6,7 +6,10 @@
 #include <array>
 #include <ctime>
 #include <format>
+#include <istream>
+#include <ostream>
 #include <stdexcept>
+#include <string>
 
 namespace borrow {
 namespace {
@@ -100,6 +103,29 @@ Date Date::add_days(long long days) const noexcept { return from_days(to_days() 
 
 long long Date::days_until(const Date& other) const noexcept {
     return other.to_days() - to_days();
+}
+
+// ===========================================================================
+//  Date 的流插入 / 流提取运算符重载
+// ---------------------------------------------------------------------------
+//  operator<<：把 Date 写到任意输出流（cout / ofstream / ostringstream）
+//  operator>>：从任意输入流读取一个 "YYYY-MM-DD" 词元并解析
+//              解析失败时置 failbit，调用方可据此判断
+// ===========================================================================
+std::ostream& operator<<(std::ostream& out, const Date& date) {
+    return out << date.to_string();
+}
+
+std::istream& operator>>(std::istream& in, Date& date) {
+    std::string text;
+    if (!(in >> text)) return in;  // 流已失效或到达末尾
+    Date parsed;
+    if (!Date::parse(text, parsed)) {
+        in.setstate(std::ios::failbit); 
+        return in;
+    }
+    date = parsed;
+    return in;
 }
 
 }  // namespace borrow

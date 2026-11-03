@@ -3,11 +3,15 @@
 // ===========================================================================
 #pragma once
 
+#include <iosfwd>
 #include <string>
 #include <string_view>
 
 namespace borrow {
 
+// 日期：借书日 / 应还日 / 归还日
+// 重载 operator<< / operator>>，使 Date 可直接用
+// std::cout << date、std::istringstream >> date 读写。
 class Date {
 public:
     constexpr Date() = default;
@@ -42,6 +46,12 @@ public:
         return a.to_days() < b.to_days();
     }
     friend bool operator>(const Date& a, const Date& b) noexcept { return b < a; }
+    friend bool operator<=(const Date& a, const Date& b) noexcept { return !(b < a); }
+    friend bool operator>=(const Date& a, const Date& b) noexcept { return !(a < b); }
+
+    // 【实验6·输入输出流】流插入 / 流提取运算符重载
+    friend std::ostream& operator<<(std::ostream& out, const Date& date);
+    friend std::istream& operator>>(std::istream& in, Date& date);
 
 private:
     int year_{1970};
