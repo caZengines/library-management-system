@@ -12,7 +12,7 @@
 
 namespace borrow::io {
 
-// 【实验6·输入输出流】std::getline 读取一整行（允许输入中包含空格），
+// std::getline 读取一整行（允许输入中包含空格），
 // 再用 trim 去掉首尾空白。遇到 EOF 时清除流状态，返回空串。
 std::string read_line(const std::string& prompt) {
     if (!prompt.empty()) std::cout << prompt;
@@ -30,7 +30,7 @@ std::optional<std::string> read_required(const std::string& prompt) {
     return value;
 }
 
-// 【实验6·输入输出流】数字输入：
+// 数字输入：
 //   - std::getline 先取一行；
 //   - std::from_chars 做严格整数解析
 //   - 非法输入时打印提示并重新读取，避免 std::cin 处于错误状态。
@@ -45,7 +45,7 @@ int read_int(const std::string& prompt, int min, int max) {
             ec == std::errc{} && ptr == last && value >= min && value <= max) {
             return value;
         }
-        std::cout << "  [提示] 请输入 " << min << " ~ " << max << " 之间的整数。\n";
+        std::cout << "  [tips] 请输入 " << min << " ~ " << max << " 之间的整数。\n";
     }
 }
 
@@ -60,7 +60,7 @@ double read_double(const std::string& prompt, double min, double max) {
         } catch (const std::exception&) {
             // 解析失败，落到下面的提示
         }
-        std::cout << "  [提示] 请输入 " << min << " ~ " << max << " 之间的数字。\n";
+        std::cout << "  [tips] 请输入 " << min << " ~ " << max << " 之间的数字。\n";
     }
 }
 
@@ -70,7 +70,7 @@ Date read_date(const std::string& prompt) {
         const std::string text = read_line(prompt);
         Date date;
         if (Date::parse(text, date)) return date;
-        std::cout << "  [提示] 日期格式应为 YYYY-MM-DD（例如 2026-10-29），请重新输入。\n";
+        std::cout << "  [tips] 日期格式应为 YYYY-MM-DD（例如 2026-10-29），请重新输入。\n";
     }
 }
 
