@@ -160,7 +160,7 @@ int main(int argc, char** argv) {
         std::cout << "数据目录：" << data_dir.string() << '\n';
 
         if (manager.seed_sample_data()) {
-            std::cout << "首次运行：已写入演示数据（学生 3 人 / 教师 2 人 / 图书 4 种 / 借阅记录 3 条）\n";
+            std::cout << "首次运行：写入演示数据（学生 3 人 / 教师 2 人 / 图书 4 种 / 借阅记录 3 条）\n";
         }
 
         bool demo_mode = false;

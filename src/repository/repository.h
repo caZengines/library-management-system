@@ -1,8 +1,6 @@
 // ===========================================================================
 //  repository.h  ——  泛型内存仓储（类模板 + 概念 + 主键策略）
 //  ---------------------------------------------------------------------------
-//  实验归属：
-//   【实验5·模板使用】
 //       1) 类模板 Repository<T, KeyOf>：同一份"增删改查、条件筛选"代码
 //          同时用于 Book（值类型）、BorrowRecord（值类型）和
 //          std::unique_ptr<User>（多态指针类型），避免为每种实体重复实现容器逻辑；
@@ -17,7 +15,6 @@
 #include <concepts>
 #include <cstddef>
 #include <format>
-#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <utility>

@@ -1,14 +1,10 @@
 // ===========================================================================
 //  borrow_manager.h  ——  借阅管理者（业务核心）
 //  ---------------------------------------------------------------------------
-//  实验归属：
-//   【实验2·组合与依赖（延续）】BorrowManager 组合持有仓储对象，
-//                              借书/还书以 User& / Book& 引用传参体现依赖；
-//   【实验3·继承与派生】通过 User* 统一管理 Student / Teacher 两种派生对象；
-//   【实验4·多态性与虚函数】借阅上限、借期、罚款单价全部由虚函数给出，
-//                              新增角色（如教师）无需修改借还算法；
-//   【实验5·模板使用】三个成员都是 Repository<T, KeyOf> 模板的实例；
-//   【实验6·输入输出流】load()/save() 使用 std::ifstream / std::ofstream
+//  BorrowManager 组合持有仓储对象，借书/还书以 User& / Book& 引用传参体现依赖；
+//   通过 User* 统一管理 Student / Teacher 两种派生对象；
+//   三个成员都是 Repository<T, KeyOf> 模板的实例；
+//   load()/save() 使用 std::ifstream / std::ofstream
 //                              与 operator>> / serialize() 完成持久化。
 // ===========================================================================
 #pragma once
@@ -26,7 +22,7 @@
 
 namespace borrow {
 
-// 【实验5·模板使用】用同一套 Repository 模板管理三种不同实体：
+//    用同一套 Repository 模板管理三种不同实体：
 //   用户是多态对象 -> 存 std::unique_ptr<User>，主键策略用 PointerKey；
 //   图书/记录是值对象 -> 直接存值，主键策略用默认的 DirectKey。
 using UserRepository = Repository<std::unique_ptr<User>, PointerKey>;
@@ -120,9 +116,9 @@ private:
     void rebuild_user_borrows();                        // 加载后把在借记录挂回用户
 
     std::filesystem::path data_dir_;
-    UserRepository users_;      // 【实验5】模板仓储：多态用户
-    BookRepository books_;      // 【实验5】模板仓储：图书
-    RecordRepository records_;  // 【实验5】模板仓储：借阅记录
+    UserRepository users_;      // 模板仓储：用户
+    BookRepository books_;      // 模板仓储：图书
+    RecordRepository records_;  // 模板仓储：借阅记录
     Date today_{Date::today()};
     int record_seq_{0};         // 借阅流水号自增序列
 };
