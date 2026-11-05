@@ -34,7 +34,7 @@ int read_int_or(const std::string& prompt, int fallback, int min, int max) {
         ec == std::errc{} && ptr == last && value >= min && value <= max) {
         return value;
     }
-    std::cout << "  [提示] 输入无效，使用默认值 " << fallback << '\n';
+    std::cout << "  [tips] 输入无效，使用默认值 " << fallback << '\n';
     return fallback;
 }
 

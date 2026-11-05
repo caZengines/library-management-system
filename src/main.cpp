@@ -1,13 +1,21 @@
 // ===========================================================================
-//  main.cpp  ——  学生借书演示
+//  main.cpp  ——  程序入口
+//  ---------------------------------------------------------------------------
+//                        启动菜单（交互流）或 --demo 演示模式。
+//  调用关系：main -> Menu(界面) -> BorrowManager(业务) -> Repository(泛型仓储) -> 数据文件
 // ===========================================================================
 #include "service/borrow_manager.h"
+#include "ui/menu.h"
 
 #include <exception>
-#include <cstdlib>
+#include <filesystem>
 #include <format>
 #include <iostream>
 #include <string>
+
+#if defined(_WIN32)
+#include <windows.h>
+#endif
 
 namespace {
 
@@ -17,173 +25,159 @@ using borrow::Date;
 using borrow::Result;
 using borrow::ReturnResult;
 using borrow::Student;
+using borrow::User;
 
-void print_separator() { std::cout << std::string(78, '-') << '\n'; }
+// 可执行文件所在目录（用于定位默认 data 目录）
+std::filesystem::path executable_dir() {
+#if defined(_WIN32)
+    wchar_t buffer[MAX_PATH]{};
+    const DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    if (length > 0) return std::filesystem::path(buffer).parent_path();
+#else
+    return std::filesystem::current_path();
+#endif
+    return std::filesystem::current_path();
+}
+
+// 数据目录：命令行第一个非选项参数优先；否则用可执行文件旁的 data/（不存在则当前目录 data/）
+std::filesystem::path resolve_data_dir(int argc, char** argv) {
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (!arg.empty() && arg.front() != '-') return arg;
+    }
+    const auto beside_exe = executable_dir() / "data";
+    std::error_code ec;
+    if (std::filesystem::exists(beside_exe, ec)) return beside_exe;
+    return std::filesystem::current_path() / "data";
+}
 
 void print_header(const std::string& title) {
-    std::cout << '\n';
-    print_separator();
-    std::cout << "  " << title << '\n';
-    print_separator();
+    std::cout << "\n" << std::string(78, '-') << "\n  " << title << "\n"
+              << std::string(78, '-') << "\n";
 }
 
-// 打印一次借书结果
-void show_result(const std::string& scene, const Result& result) {
-    std::cout << std::format("  [{}] {}\n", result.ok ? "借书成功" : "借书失败", result.message);
-    std::cout << std::format("      （场景：{}）\n", scene);
+void show_result(const Result& result) {
+    std::cout << (result.ok ? "  [成功] " : "  [失败] ") << result.message << '\n';
 }
 
-// 打印一次还书结果
-void show_return(const std::string& scene, const ReturnResult& result) {
-    std::cout << std::format("  [{}] {}\n", result.ok ? "还书成功" : "还书失败", result.message);
-    std::cout << std::format("      （场景：{}）\n", scene);
+void show_return(const ReturnResult& result) {
+    std::cout << (result.ok ? "  [成功] " : "  [失败] ") << result.message << '\n';
 }
 
-// 演示数据初始化
-void init_demo_data(BorrowManager& manager) {
-    manager.add_book(Book{"978-7-111-40701-4", "C++ Primer（第5版）", "Stanley B. Lippman", 3, 3});
-    manager.add_book(Book{"978-7-121-35685-4", "深入理解计算机系统", "Randal E. Bryant", 1, 1});
-    manager.add_book(Book{"978-7-302-53112-0", "数据结构（C++版）", "王红梅", 2, 2});
+// ---------------------------------------------------------------------------
+//  --demo 模式：把 7 个典型场景跑一遍，方便截图写实验报告
+//  说明：演示会修改演示数据；需要干净数据时可在菜单"系统设置 -> 重置为演示数据"
+// ---------------------------------------------------------------------------
+void run_demo(BorrowManager& manager) {
+    const Date today = manager.today();
+    std::cout << std::format("  系统日期：{}   用户 {} 人   图书 {} 种\n", today.to_string(),
+                             manager.list_users().size(), manager.list_books().size());
 
-    manager.add_student(Student{"2023001", "张三", "软件工程", 2});  
-    manager.add_student(Student{"2023002", "李四", "计算机科学与技术", 3});
-    manager.add_student(Student{"2023003", "王五", "网络安全", 3});
-}
-
-void print_student_state(const BorrowManager& manager, const std::string& id) {
-    const Student* student = manager.find_student(id);
-    if (student == nullptr) return;
-    std::cout << std::format("  学生状态：{} {} 已借 {}/{} 本，累计罚款 {:.2f} 元\n", student->id(),
-                             student->name(), student->borrowed_count(), student->max_borrow(),
-                             student->total_fine());
-    for (const auto& item : student->borrowed()) {
-        if (item.book == nullptr) continue;
-        std::cout << std::format("      · 《{}》 借书日 {}  应还日 {}\n", item.book->title(),
-                                 item.borrow_date.to_string(), item.due_date.to_string());
+    print_header("场景1 学生借书成功（学生借期 30 天）");
+    if (User* user = manager.find_user("2023001")) {
+        if (Book* book = manager.find_book("978-7-111-49997-9")) {
+            std::cout << "  " << *user << '\n';
+            show_result(manager.borrow_book(*user, *book, today));
+        }
     }
-}
 
-void print_book_state(const BorrowManager& manager, const std::string& isbn) {
-    const Book* book = manager.find_book(isbn);
-    if (book == nullptr) return;
-    std::cout << std::format("  图书状态：《{}》 {}\n", book->title(), book->status_text());
+    print_header("场景2 学生达到最大借阅数量（新学生上限设为 2 本）");
+    manager.add_student("2023999", "演示学生", "计算机学院", "软件工程", "2023级", 2);
+    if (User* user = manager.find_user("2023999")) {
+        if (Book* first = manager.find_book("978-7-111-40701-4")) {
+            show_result(manager.borrow_book(*user, *first, today));
+        }
+        if (Book* second = manager.find_book("978-7-302-53112-0")) {
+            show_result(manager.borrow_book(*user, *second, today));
+        }
+        if (Book* third = manager.find_book("978-7-111-49997-9")) {
+            show_result(manager.borrow_book(*user, *third, today));  // 第 3 本 -> 超限
+        }
+    }
+
+    print_header("场景3 学生重复借阅同一本书");
+    if (User* user = manager.find_user("2023999")) {
+        if (Book* book = manager.find_book("978-7-111-40701-4")) {
+            show_result(manager.borrow_book(*user, *book, today));
+        }
+    }
+
+    print_header("场景4 图书已全部借出（《深入理解计算机系统》仅 1 册，已被李四借走）");
+    if (User* user = manager.find_user("2022015")) {
+        if (Book* book = manager.find_book("978-7-121-35685-4")) {
+            std::cout << "  " << *book << '\n';
+            show_result(manager.borrow_book(*user, *book, today));
+        }
+    }
+
+    print_header("场景5 教师借书（教师借期 60 天，与学生的 30 天不同）");
+    if (User* user = manager.find_user("T1001")) {
+        if (Book* book = manager.find_book("978-7-302-53112-0")) {
+            std::cout << "  " << *user << '\n';
+            show_result(manager.borrow_book(*user, *book, today));
+        }
+    }
+
+    print_header("场景6 逾期归还（学生李四，逾期 10 天，0.20 元/天）");
+    if (User* user = manager.find_user("2023002")) {
+        const std::string isbn = "978-7-121-35685-4";
+        std::cout << std::format("  归还前预览：逾期 {} 天，罚款 {:.2f} 元\n",
+                                 manager.overdue_days(*user, isbn, today),
+                                 manager.preview_fine(*user, isbn, today));
+        show_return(manager.return_book(*user, isbn, today));
+    }
+
+    print_header("场景7 归还未借阅的图书");
+    if (User* user = manager.find_user("2022015")) {
+        show_return(manager.return_book(*user, "978-7-302-53112-0", today));
+    }
+
+    print_header("演示结束：统计信息");
+    int active = 0;
+    for (const auto& record : manager.records().all()) {
+        if (!record.returned()) ++active;
+    }
+    std::cout << std::format("  用户 {} 人，图书 {} 种，借阅记录 {} 条（在借 {} 条）\n",
+                             manager.list_users().size(), manager.list_books().size(),
+                             manager.records().size(), active);
+    for (const User* user : manager.list_users()) {
+        std::cout << std::format("  {} {}（{}）已借 {}/{} 本，累计罚款 {:.2f} 元\n", user->id(),
+                                 user->name(), user->role_name(), user->borrowed_count(),
+                                 user->max_borrow(), user->total_fine());
+    }
 }
 
 }  // namespace
 
-int main() {
-    system("chcp 65001");
+int main(int argc, char** argv) {
+#if defined(_WIN32)
+    system("chcp 65001 > nul");
+#endif
 
     try {
-        BorrowManager manager;
-        init_demo_data(manager);
+        const std::filesystem::path data_dir = resolve_data_dir(argc, argv);
+        BorrowManager manager{data_dir};
+        std::cout << "数据目录：" << data_dir.string() << '\n';
 
-        print_header("学生借书演示 —— 组合关系（管理者持有学生/图书） + 依赖关系（借书传引用）");
-        std::cout << std::format("  系统日期：{}\n", manager.today().to_string());
-        std::cout << std::format("  共 {} 种图书、{} 名学生\n", manager.books().size(),
-                                 manager.students().size());
-
-        // ---------------- 正常借书成功 ----------------
-        print_header("场景1 正常借书：张三 借《C++ Primer》");
-        {
-            Student* student = manager.find_student("2023001");
-            Book* book = manager.find_book("978-7-111-40701-4");
-            show_result("双方状态都允许", manager.borrow_book(*student, *book, manager.today()));
-            print_student_state(manager, "2023001");
-            print_book_state(manager, "978-7-111-40701-4");
+        if (manager.seed_sample_data()) {
+            std::cout << "首次运行：已写入演示数据（学生 3 人 / 教师 2 人 / 图书 4 种 / 借阅记录 3 条）\n";
         }
 
-        {
-            Student* student = manager.find_student("2023001");
-            manager.borrow_book(*student, *manager.find_book("978-7-121-35685-4"), manager.today());
-            manager.borrow_book(*student, *manager.find_book("978-7-302-53112-0"), manager.today());
-        }
-        print_header("场景2 学生状态不允许：张三 借第 3 本（已借满 2 本，上限 2 本）");
-        {
-            Student* student = manager.find_student("2023001");
-            Book* book = manager.find_book("978-7-121-35685-4");
-            std::cout << std::format("  借阅前：{} 已借 {}/{} 本\n", student->name(),
-                                     student->borrowed_count(), student->max_borrow());
-            show_result("超出最大借阅数量", manager.borrow_book(*student, *book, manager.today()));
-            print_student_state(manager, "2023001");
+        bool demo_mode = false;
+        for (int i = 1; i < argc; ++i) {
+            if (std::string(argv[i]) == "--demo") demo_mode = true;
         }
 
-        // ---------------- 重复借同一本书 ----------------
-        print_header("场景3 学生状态不允许：张三 重复借已借过的《C++ Primer》");
-        {
-            Student* student = manager.find_student("2023002");
-            // 先让李四借走一本，再把上限提高，专门演示"重复借同一本"这一条
-            Book* book = manager.find_book("978-7-302-53112-0");
-            manager.borrow_book(*student, *book, manager.today());
-            show_result("同一本书不能重复借", manager.borrow_book(*student, *book, manager.today()));
+        if (demo_mode) {
+            run_demo(manager);
+            return 0;
         }
 
-        // ---------------- 图书已全部借出 ----------------
-        print_header("场景 图书状态不允许：李四 借《深入理解计算机系统》（仅 1 册，已被张三借走）");
-        {
-            Student* student = manager.find_student("2023002");
-            Book* book = manager.find_book("978-7-121-35685-4");
-            std::cout << std::format("  借阅前图书状态：《{}》 {}\n", book->title(),
-                                     book->status_text());
-            show_result("图书在馆册数为 0", manager.borrow_book(*student, *book, manager.today()));
-            print_book_state(manager, "978-7-121-35685-4");
-        }
-
-        // ---------------- 按期归还 ----------------
-        print_header("场景5 按期归还：李四 归还《数据结构（C++版）》（借出 10 天后）");
-        {
-            manager.advance_days(10);
-            std::cout << std::format("  当前系统日期：{}\n", manager.today().to_string());
-            Student* student = manager.find_student("2023002");
-            const std::string isbn = "978-7-302-53112-0";
-            std::cout << std::format("  归还前预估：逾期 {} 天，罚款 {:.2f} 元\n",
-                                     manager.overdue_days(*student, isbn, manager.today()),
-                                     manager.preview_fine(*student, isbn, manager.today()));
-            show_return("未超过应还日期", manager.return_book(*student, isbn, manager.today()));
-            print_student_state(manager, "2023002");
-            print_book_state(manager, isbn);
-        }
-
-        // ---------------- 逾期归还 ----------------
-        print_header("场景6 逾期归还：张三 归还《C++ Primer》（借出满 45 天，超过借期 30 天）");
-        {
-            manager.advance_days(35);  // 累计 45 天
-            std::cout << std::format("  当前系统日期：{}\n", manager.today().to_string());
-            Student* student = manager.find_student("2023001");
-            const std::string isbn = "978-7-111-40701-4";
-            const long long days = manager.overdue_days(*student, isbn, manager.today());
-            const double fine = manager.preview_fine(*student, isbn, manager.today());
-            std::cout << std::format("  归还前预估：逾期 {} 天 × 0.20 元/天 = {:.2f} 元\n", days,
-                                     fine);
-            show_return("超过应还日期", manager.return_book(*student, isbn, manager.today()));
-            print_student_state(manager, "2023001");
-            print_book_state(manager, isbn);
-        }
-
-        // ---------------- 归还没借过的书 ----------------
-        print_header("场景7 异常分支：王五 归还自己没借过的《算法导论》");
-        {
-            Student* student = manager.find_student("2023003");
-            show_return("借阅清单中不存在该书",
-                        manager.return_book(*student, "978-7-111-49997-9", manager.today()));
-        }
-
-        print_header("演示结束");
-        std::cout << "  全部图书状态：\n";
-        for (const Book& book : manager.books()) {
-            std::cout << std::format("      《{}》 {}\n", book.title(), book.status_text());
-        }
-        std::cout << "  全部学生状态：\n";
-        for (const Student& student : manager.students()) {
-            std::cout << std::format("      {} {} 已借 {}/{} 本，累计罚款 {:.2f} 元\n", student.id(),
-                                     student.name(), student.borrowed_count(), student.max_borrow(),
-                                     student.total_fine());
-        }
-        system("pause");
+        borrow::Menu menu{manager};
+        menu.run();
         return 0;
     } catch (const std::exception& e) {
-        std::cerr << "[严重错误] " << e.what() << '\n';
-        system("pause");
+        std::cerr << "\n[严重错误] " << e.what() << '\n';
         return 1;
     }
 }

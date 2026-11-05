@@ -148,9 +148,9 @@ bool BorrowManager::empty() const {
 bool BorrowManager::seed_sample_data() {
     if (!empty()) return false;
 
-    add_student("2023001", "张三", "计算机学院", "软件工程", "2023级");
-    add_student("2023002", "李四", "计算机学院", "人工智能", "2023级");
-    add_student("2022015", "王五", "外国语学院", "英语", "2022级");
+    add_student("5120253792", "张三", "计算机学院", "软件工程", "2023级");
+    add_student("4920234691", "李四", "计算机学院", "人工智能", "2023级");
+    add_student("9420261721", "王五", "外国语学院", "英语", "2022级");
     add_teacher("T1001", "刘老师", "计算机学院", "副教授");
     add_teacher("T1002", "陈老师", "数学学院", "讲师");
 
