@@ -46,7 +46,6 @@ add_executable(library_system
 
 target_include_directories(library_system PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
-# 源码统一 UTF-8（含中文注释与提示文本）
 if(MSVC)
     target_compile_options(library_system PRIVATE /utf-8 /W4)
 else()
