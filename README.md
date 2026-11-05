@@ -1,113 +1,145 @@
-# 面向对象程序设计（C++）—— 学生借书系统
+# 面向对象程序设计（C++）—— 图书馆借阅管理系统
 
-本项目按"一步一步搭建系统"的方式推进，当前阶段完成 **《组合、依赖关系》** 实验：
-对学生和图书进行抽象，学生发起借书操作（依赖关系），借阅成功时学生与图书的状态同步改变。
+本项目由"学生借书"小系统逐步扩展而来：
 
-- 语言标准：**C++20**（`std::format` / `std::ranges` / `std::erase_if`）
-- 构建工具：CMake ≥ 3.20（GCC 13+ / Clang 16+ / MSVC 19.30+）
-- 第三方依赖：无（全部使用标准库）
-- 数据存储：内存存储；`BorrowManager` 已提供 `load()/save()` 文本文件读写接口，后续阶段接入
-
-## 一、类间关系（本阶段重点）
-
-### 1. 组合关系（Composition）
-`BorrowManager` 用**按值的容器**持有学生与图书，生命周期完全由管理者控制：
-
-```cpp
-class BorrowManager {
-private:
-    std::vector<Book>    books_;      // 组合：图书由管理者拥有
-    std::vector<Student> students_;   // 组合：学生由管理者拥有
-};
-```
-学生内部还有一层嵌套组合：`Student` 按值持有 `std::vector<BorrowItem>`。
-
-### 2. 依赖关系（Dependency）
-借书动作用**引用**接收对象，并只保存 `Book*` 而不负责其生死：
-
-```cpp
-Result borrow_book(Student& student, Book& book, const Date& date);  // 引用传参
-...
-student.add_borrowed_item(&book, date, due_date);                    // 只借用，不销毁
-```
-图书的所有权在管理者手里，因此 `BorrowItem::book` 是裸指针且**不 delete**，避免双重释放。
-
-### 3. 借书成功的判定与状态同步
-| 校验对象 | 判据 | 不通过时的提示 |
+| 实验 | 主题 | 在本项目中的体现 |
 |---|---|---|
-| 学生状态 | `can_borrow_more()`：已借数量 < 最大借阅数量 | 已达最大借阅数量 |
-| 学生状态 | `has_borrowed(isbn)`：不能重复借同一本 | 不能重复借同一本书 |
-| 图书状态 | `borrowable()`：在馆册数 > 0 | 图书已全部借出 |
+| 实验 3 | 继承与派生 | `User` 抽象基类 + `Student` / `Teacher` 公有派生；虚析构、`override`、多态工厂 |
+| 实验 4 | 多态性与虚函数 | 借阅上限、借期、罚款单价全部由虚函数给出；基类指针统一管理用户；`dynamic_cast` 区分派生类型 |
+| 实验 5 | 模板使用 | 类模板 `Repository<T, KeyOf>` + 主键策略、C++20 `concept` 约束、函数模板 `print_table<T, RowFn>`、成员函数模板 `where(Pred)` |
+| 实验 6 | 输入输出流 | `operator<<` / `operator>>` 重载、`ifstream/ofstream` 持久化、`std::getline` 与 `std::from_chars` 输入校验、菜单交互 |
 
-两者都允许后才同步变更：`book.take_one()`（在馆册数 −1、借出次数 +1）
-+ `student.add_borrowed_item(&book, date, due)`（借阅清单 +1）。
+- 语言标准：**C++20**（`std::format` / `std::ranges` / `std::erase_if` / concepts）
+- 构建工具：CMake ≥ 3.20（GCC 13+ / Clang 16+ / MSVC 19.30+）
+- 第三方依赖：无
+- 数据存储：`data/users.txt`、`data/books.txt`、`data/records.txt`（竖线分隔的文本，启动时加载、变更后写回）
 
-### 4. 逾期罚款
-还书时按"应还日 vs 实际归还日"计算：`罚款 = 逾期天数 × 0.20 元/天`，
-逾期天数通过把日期换算成"距 1970-01-01 的天数"后相减得到（自实现，避免依赖 `<chrono>` 日历部分）。
+## 一、快速开始
+
+```bash
+cmake -S . -B build && cmake --build build
+./build/library_system            # Windows: build\library_system.exe
+```
+
+首次运行会自动写入演示数据（学生 3 人、教师 2 人、图书 4 种、借阅记录 3 条，
+其中含 1 条逾期记录，便于演示罚款）。
+
+两种运行方式：
+
+```bash
+library_system                 # 菜单交互模式
+library_system --demo          # 演示模式：自动跑 7 个典型场景并输出结果
+library_system D:/lib_data     # 指定数据目录（不存在会自动创建）
+```
+
+> 注意：`--demo` 会真实修改数据。需要恢复初始数据时，可在菜单
+> `5. 系统设置 → 6. 重置为演示数据` 中重置。
 
 ## 二、目录结构
 
 ```
 library-management/
-├─ CMakeLists.txt              # 构建脚本（目标 borrow_demo，C++20）
-├─ README.md                   # 本文件
-├─ 组合依赖关系_设计报告.docx    # 实验设计报告
-├─ requires.txt                # 实验题目与要求
-├─ docs/uml/                   # UML 图（PlantUML 源文件 + PNG/SVG 渲染产物）
-│  ├─ borrow-class-diagram.*   # 类图（组合关系 + 依赖关系）
-│  ├─ borrow-flowchart.*       # 核心函数 borrow_book 流程图
-│  └─ core-flow.*              # 借书/还书时序图
+├─ CMakeLists.txt
+├─ README.md
+├─ docs/
+│  ├─ EXPERIMENTS.md            # 实验内容 ↔ 代码位置对照表（分批提交 git 用）
+│  └─ uml/                      # PlantUML 类图 / 流程图（源文件 + 渲染产物）
 └─ src/
-   ├─ main.cpp                 # 演示程序：7 个测试场景
+   ├─ main.cpp                  # 入口：定位数据目录、演示数据、菜单 / --demo
+   ├─ util/
+   │  ├─ date.h / .cpp          # 日期运算 + 流运算符重载（实验6）
+   │  ├─ strings.h / .cpp       # trim / split / 模糊匹配
+   │  ├─ io.h / .cpp            # 控制台输入校验（实验6）
+   │  └─ table.h                # 表格打印函数模板 print_table<T>（实验5）
    ├─ model/
-   │  ├─ book.h / book.cpp         # 图书类：ISBN/书名/作者/总册数/在馆册数/借出次数
-   │  └─ student.h / student.cpp   # 学生类：学号/姓名/专业/最大借阅数量/借阅清单/累计罚款
+   │  ├─ user.h / .cpp          # User 抽象基类、Student、Teacher（实验3/4/6）
+   │  ├─ book.h / .cpp          # 图书类 + 序列化 + 流运算符（实验6）
+   │  └─ borrow_record.h / .cpp # 借阅记录 + 状态判定 + 序列化（实验6）
+   ├─ repository/
+   │  └─ repository.h           # 泛型仓储 Repository<T, KeyOf>（实验5）
    ├─ service/
-   │  └─ borrow_manager.h / .cpp   # 借阅管理者：组合持有 + 借书还书（依赖）
-   └─ util/
-      └─ date.h / date.cpp         # 日期工具：借书日 / 应还日 / 逾期天数
+   │  └─ borrow_manager.h / .cpp# 业务核心：用户/图书/借还/罚款/统计
+   └─ ui/
+      └─ menu.h / .cpp          # 菜单界面（实验6）
 ```
 
-## 三、构建与运行
+## 三、核心设计
 
-```bash
-# CMake（推荐）
-cmake -S . -B build && cmake --build build
-./build/borrow_demo            # Windows: build\borrow_demo.exe
+### 1. 继承与派生（实验 3）
 
-# 或者直接编译
-g++ -std=c++20 -Wall -Wextra -Isrc src/main.cpp src/model/*.cpp src/service/*.cpp src/util/*.cpp -o borrow_demo
+```cpp
+class User {                                  // 抽象基类
+public:
+    virtual ~User() = default;                // 虚析构：基类指针 delete 派生对象
+    virtual std::string role_name() const = 0;
+    virtual std::string extra_info() const = 0;
+    virtual int  max_borrow() const = 0;
+    virtual void set_max_borrow(int) = 0;
+    virtual int  borrow_days() const = 0;
+    virtual double fine_per_day() const = 0;
+    virtual std::string serialize() const = 0;
+    virtual std::ostream& print(std::ostream&) const;
+};
+
+class Student final : public User { /* 专业、年级、上限 5 本、借期 30 天、0.20 元/天 */ };
+class Teacher final : public User { /* 职称、     上限 10 本、借期 60 天、0.50 元/天 */ };
 ```
 
-演示程序依次输出 7 个场景：正常借书成功、达到最大借阅数量、重复借同一本书、
-图书已全部借出、按期归还、逾期归还（15 天 × 0.20 = 3.00 元）、归还未借图书。
+- 公共属性（编号、姓名、院系、借阅清单、累计罚款）放在基类；
+- 专有属性（专业/年级、职称）放在派生类；
+- `User::deserialize()` 是**多态工厂**：按行首 `STUDENT` / `TEACHER` 构造对应派生对象，
+  因此一个 `users.txt` 能同时保存两类用户。
 
-## 四、需要自行补充实现的位置
+### 2. 多态性与虚函数（实验 4）
 
-题目要求"核心函数算法代码需包含自己的修改注释"，因此以下位置预留了标记
-（在编辑器中搜索 `【请自行实现】` 即可定位），未填写时程序会返回失败提示，属正常现象：
+业务层只持有 `User&` / `User*`，不需要知道真实类型：
 
-| 编号 | 文件 | 函数 | 内容 |
-|---|---|---|---|
-| (1/6) | `src/model/book.cpp` | `Book::take_one()` | 借出：在馆册数 −1、借出次数 +1 |
-| (2/6) | `src/model/book.cpp` | `Book::give_one()` | 归还：在馆册数 +1 |
-| (3/6) | `src/model/book.cpp` | `Book::add_copies()` | 补充馆藏（参数校验） |
-| (4/6) | `src/model/student.cpp` | `Student::has_borrowed()` | 用 STL 算法判断是否已借该书 |
-| (5/6) | `src/model/student.cpp` | `Student::add_borrowed_item()` | 借阅清单新增 |
-| (6/6) | `src/model/student.cpp` | `Student::remove_borrowed_item()` | 借阅清单删除（迭代器失效） |
-| (7/7) | `src/service/borrow_manager.cpp` | `BorrowManager::borrow_book()` | **借书主流程**（报告重点） |
+```cpp
+// service/borrow_manager.cpp
+if (!user.can_borrow_more()) { ... user.max_borrow() ... }     // 虚函数 -> 学生 5 / 教师 10
+const Date due = date.add_days(user.borrow_days());           // 虚函数 -> 学生 30 / 教师 60
+const double fine = overdue * user.fine_per_day();            // 虚函数 -> 0.20 / 0.50
+```
 
-异常处理预留 4 处标记（搜索 `【异常处理·占位符】`）：
-`borrow_manager.cpp` 的 `load()`/`save()`（数据文件容错与写入失败）、
-`main.cpp` 的业务异常分层捕获与最外层兜底。
+新增角色（如校外读者）只需增加一个派生类并实现策略，借还算法不用改。
 
-> 说明：`borrow_book()` 中另附一份**已注释的参考实现**，用于自己写完代码后对比思路；
-> 提交前建议删除该注释块，以符合"包含自己的修改注释"的要求。
+### 3. 模板使用（实验 5）
 
-## 五、后续阶段规划
+```cpp
+// 主键策略：值对象 / 多态指针各一套
+struct DirectKey  { template <typename T> static const std::string& get(const T& v){ return v.id(); } };
+struct PointerKey { template <typename T> static const std::string& get(const T& v){ return v->id(); } };
 
-1. **阶段二 · 数据持久化**：把 `load()/save()` 接入主流程，新增借阅记录文件，保证重启后状态可恢复。
-2. **阶段三 · 界面层**：增加菜单式控制台交互（图书入库、学生注册、借书、还书、查询统计）。
-3. **阶段四 · 关系扩展**：引入读者基类 `Reader`（学生/教师/校外读者），
-   用继承 + 多态区分借期与罚款策略，用组合持有 `BorrowPolicy` 策略对象。
+template <typename T, typename KeyOf = DirectKey>
+    requires Keyed<T, KeyOf>
+class Repository { /* add / find / update / remove / where(pred) */ };
+
+using UserRepository   = Repository<std::unique_ptr<User>, PointerKey>;  // 多态对象
+using BookRepository   = Repository<Book>;
+using RecordRepository = Repository<BorrowRecord>;
+```
+
+同一套增删改查代码复用于三种实体；`where()` 是成员函数模板；
+`print_table<T, RowFn>` 是函数模板，配合 `TableEntity` 概念打印任意列表。
+
+### 4. 输入输出流（实验 6）
+
+- **流运算符**：`Date`、`Book`、`BorrowRecord`、`User` 均重载 `operator<<`；
+  `Date`、`Book`、`BorrowRecord` 重载 `operator>>`，可直接用于文件读写；
+- **文件持久化**：`BorrowManager::load()` 用 `std::ifstream` + `>>` 读取，
+  `save()` 用 `std::ofstream` + `<<` 写入；启动时按"图书 → 用户 → 记录"顺序加载，
+  再把未归还记录挂回用户的借阅清单；
+- **控制台输入**：`util/io` 用 `std::getline` 读整行、`std::from_chars` 解析数字，
+  非法输入循环提示并清理流状态；
+- **格式化输出**：使用 `std::format` 生成表格与提示。
+
+## 四、业务规则
+
+| 规则 | 说明 |
+|---|---|
+| 借书前置校验 | ① 未重复借同一本 ② 未超过最大借阅数量 ③ 图书在馆册数 > 0 |
+| 应还日期 | 借书日 + 借期（学生 30 天 / 教师 60 天） |
+| 逾期判定 | 未归还且"归还日 > 应还日"即逾期；天数 = 归还日 − 应还日 |
+| 罚款 | 逾期天数 × 日单价（学生 0.20 元/天，教师 0.50 元/天） |
+| 删除保护 | 有未还图书的用户、借出中的图书不允许删除 |
+| 数据一致性 | 借书先改图书状态再写记录，任一步失败则回滚；所有变更立即落盘 |

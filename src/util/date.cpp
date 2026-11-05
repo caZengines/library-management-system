@@ -8,7 +8,6 @@
 #include <format>
 #include <istream>
 #include <ostream>
-#include <stdexcept>
 #include <string>
 
 namespace borrow {
@@ -77,7 +76,6 @@ bool Date::parse(std::string_view text, Date& out) {
 }
 
 Date Date::today() {
-    // 复用天数互转，避免依赖 <chrono> 日历部分
     const std::time_t now = std::time(nullptr);
     const long long days = static_cast<long long>(now / 86400);
     return from_days(days);
