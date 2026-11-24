@@ -185,7 +185,7 @@ void Menu::edit_user() {
         io::read_line(std::format("院系 [{}]: ", user->department()));
     if (!department.empty()) user->set_department(department);
 
-    // 【实验4·多态性与虚函数】用 dynamic_cast 判断对象的真实派生类型，
+    // 用 dynamic_cast 判断对象的真实派生类型，
     // 只有学生才有专业/年级，只有教师才有职称。
     if (auto* student = dynamic_cast<Student*>(user)) {
         const std::string major = io::read_line(std::format("专业 [{}]: ", student->major()));
