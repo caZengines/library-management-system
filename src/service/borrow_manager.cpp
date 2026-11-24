@@ -34,7 +34,7 @@ StagedFile stage(const std::filesystem::path& target, const std::string& content
     return f;
 }
 
-// 提交阶段失败时回滚：把已替换的文件用 .bak 还回去
+// 提交失败时回滚
 void rollback(const std::vector<StagedFile>& files, const std::vector<size_t>& committed) {
     namespace fs = std::filesystem;
     for (size_t idx : committed) {

@@ -116,9 +116,9 @@ private:
     void rebuild_user_borrows();                        // 加载后把在借记录挂回用户
 
     std::filesystem::path data_dir_;
-    UserRepository users_;      // 模板仓储：用户
-    BookRepository books_;      // 模板仓储：图书
-    RecordRepository records_;  // 模板仓储：借阅记录
+    UserRepository users_{};      // 模板仓储：用户
+    BookRepository books_{};      // 模板仓储：图书
+    RecordRepository records_{};  // 模板仓储：借阅记录
     Date today_{Date::today()};
     int record_seq_{0};         // 借阅流水号自增序列
 };
