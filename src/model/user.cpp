@@ -77,11 +77,10 @@ std::string User::to_string() const {
                        fine_per_day());
 }
 
-// 【实验4·多态性与虚函数】print() 内部调用虚函数 role_name()/extra_info()/
-// max_borrow()/borrow_days()/fine_per_day()，同一个基类实现因对象真实类型不同
-// 而输出不同内容——这就是运行时多态。
+// print() 内部调用虚函数 role_name()/extra_info()/
+// max_borrow()/borrow_days()/fine_per_day()
 std::ostream& User::print(std::ostream& out) const {
-    out << std::format("{}（{}）| 院系：{} | {} | 限借 {} 本 | 借期 {} 天 | 逾期 {:.2f} 元/天",
+    out << std::format("{}({})| 院系：{} | {} | 限借 {} 本 | 借期 {} 天 | 逾期 {:.2f} 元/天",
                        name_, role_name(), department_, extra_info(), max_borrow(), borrow_days(),
                        fine_per_day());
     if (borrowed_count() > 0) {
@@ -95,7 +94,6 @@ std::ostream& User::print(std::ostream& out) const {
 
 std::ostream& operator<<(std::ostream& out, const User& user) { return user.print(out); }
 
-// 【实验6·输入输出流】文本 -> 对象 的工厂：
 // 根据首字段区分 STUDENT / TEACHER，再调用对应派生类构造。
 std::optional<std::unique_ptr<User>> User::deserialize(const std::string& line) {
     const auto fields = split(line, '|');

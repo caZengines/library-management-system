@@ -447,7 +447,7 @@ void Menu::show_all_records() {
 void Menu::show_overdue_report() {
     const Date today = manager_.today();
     const auto records = manager_.overdue_records(today);
-    std::cout << std::format("\n逾期清单（系统日期 {}，共 {} 条）\n", today.to_string(),
+    std::cout << std::format("\n逾期清单(系统日期 {}，共 {} 条)\n", today.to_string(),
                              records.size());
     if (records.empty()) {
         std::cout << "  （当前没有逾期记录）\n";
