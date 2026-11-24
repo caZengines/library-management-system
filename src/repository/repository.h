@@ -15,6 +15,7 @@
 #include <concepts>
 #include <cstddef>
 #include <format>
+#include <algorithm>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -44,7 +45,7 @@ struct PointerKey {
 // ---------------------------------------------------------------------------
 template <typename T, typename KeyOf>
 concept Keyed = requires(const T& value) {
-    { KeyOf::get(value) } -> std::convertible_to<const std::string&>;
+    { KeyOf::get(value) } -> std::same_as<const std::string&>;
 };
 
 // ---------------------------------------------------------------------------

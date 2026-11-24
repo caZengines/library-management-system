@@ -12,6 +12,86 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <sstream>
+
+namespace  {
+
+struct StagedFile {
+    std::filesystem::path target;
+    std::filesystem::path tmp;
+    std::filesystem::path bak;
+};
+
+// 内容写到 .tmp
+StagedFile stage(const std::filesystem::path& target, const std::string& content) {
+    StagedFile f{target, target.string() + ".tmp", target.string() + ".bak"};
+    std::ofstream out{f.tmp, std::ios::trunc};
+    if (!out) throw std::runtime_error("无法写入临时文件: " + f.tmp.string());
+    out << content;
+    out.flush();
+    if (!out) throw std::runtime_error("写入临时文件失败: " + f.tmp.string());
+    out.close();
+    return f;
+}
+
+// 提交阶段失败时回滚：把已替换的文件用 .bak 还回去
+void rollback(const std::vector<StagedFile>& files, const std::vector<size_t>& committed) {
+    namespace fs = std::filesystem;
+    for (size_t idx : committed) {
+        const StagedFile& f = files[idx];
+        std::error_code ec;
+        if (!fs::exists(f.bak, ec)) continue;   // 原来没旧文件，无可回滚
+        ec.clear();
+        fs::remove(f.target, ec);               // 删掉新内容
+        ec.clear();
+        fs::rename(f.bak, f.target, ec);        // 还原旧内容
+        if (ec) std::cerr << "[save] 回滚失败: " << f.target.string()
+                          << " : " << ec.message() << '\n';
+    }
+}
+
+void commit_all(std::vector<StagedFile>& files) {
+    namespace fs = std::filesystem;
+    std::vector<size_t> committed;
+
+    auto cleanup_tmp = [&] {
+        for (auto& f : files) { std::error_code ec; fs::remove(f.tmp, ec); }
+    };
+
+    for (size_t i = 0; i < files.size(); ++i) {
+        StagedFile& f = files[i];
+        std::error_code ec;
+
+        fs::remove(f.bak, ec);                              // 清旧 .bak
+        const bool had_old = fs::exists(f.target, ec);
+
+        if (had_old) {                                      // 旧文件 -> .bak
+            ec.clear();
+            fs::rename(f.target, f.bak, ec);
+            if (ec) {
+                cleanup_tmp();
+                rollback(files, committed);
+                throw std::runtime_error("备份失败: " + f.target.string()
+                                         + " : " + ec.message());
+            }
+        }
+        ec.clear();                                         // tmp -> target
+        fs::rename(f.tmp, f.target, ec);
+        if (ec) {
+            if (had_old) {
+                std::error_code r;
+                fs::rename(f.bak, f.target, r);
+            }
+            cleanup_tmp();
+            rollback(files, committed);
+            throw std::runtime_error("替换失败: " + f.target.string()
+                                     + " : " + ec.message());
+        }
+        committed.emplace_back(i);
+    }
+}
+
+}
 
 namespace borrow {
 
@@ -93,7 +173,7 @@ void BorrowManager::load() {
 }
 
 // 加载后：把"未归还"的记录重新挂到对应用户的借阅清单上
-// （用户对象与图书对象分别来自 users.txt / books.txt，这里只恢复关联关系）
+// （用户对象与图书对象分别来自 users.txt / books.txt）
 void BorrowManager::rebuild_user_borrows() {
     for (const BorrowRecord* record :
          records_.where([](const BorrowRecord& r) { return !r.returned(); })) {
@@ -110,32 +190,37 @@ void BorrowManager::rebuild_user_borrows() {
 void BorrowManager::save() const {
     std::error_code ec;
     std::filesystem::create_directories(data_dir_, ec);  // 目录不存在则创建
+    if (ec) throw std::runtime_error("无法创建数据目录: " + ec.message());
 
+    std::string users_text, books_text, records_text;
     {
-        std::ofstream out{path_of("users.txt"), std::ios::trunc};
-        if (!out) throw std::runtime_error("无法写入 users.txt");
-        out << "# users.txt —— 每行一条用户记录，字段以 | 分隔\n";
-        out << "# STUDENT|学号|姓名|院系|专业|年级|最大借阅数量|累计罚款\n";
-        out << "# TEACHER|工号|姓名|院系|职称|最大借阅数量|累计罚款\n";
-        for (const auto& user : users_.all()) out << user->serialize() << '\n';
-        if (!out) throw std::runtime_error("写入 users.txt 失败");
+        std::ostringstream oss;
+        oss << "# users.txt —— 每行一条用户记录，字段以 | 分隔\n";
+        oss << "# STUDENT|学号|姓名|院系|专业|年级|最大借阅数量|累计罚款\n";
+        oss << "# TEACHER|工号|姓名|院系|职称|最大借阅数量|累计罚款\n";
+        for (const auto& user : users_.all()) oss << user->serialize() << '\n';
+        users_text = oss.str();
     }
     {
-        std::ofstream out{path_of("books.txt"), std::ios::trunc};
-        if (!out) throw std::runtime_error("无法写入 books.txt");
-        out << "# books.txt —— 每行一条图书记录，字段以 | 分隔\n";
-        out << "# ISBN|书名|作者|总册数|在馆册数|借出次数\n";
-        for (const Book& book : books_.all()) out << book.serialize() << '\n';
-        if (!out) throw std::runtime_error("写入 books.txt 失败");
+        std::ostringstream oss;
+        oss << "# books.txt —— 每行一条图书记录，字段以 | 分隔\n";
+        oss << "# ISBN|书名|作者|总册数|在馆册数|借出次数\n";
+        for (const Book& book : books_.all()) oss << book.serialize() << '\n';
+        books_text = oss.str();
     }
     {
-        std::ofstream out{path_of("records.txt"), std::ios::trunc};
-        if (!out) throw std::runtime_error("无法写入 records.txt");
-        out << "# records.txt —— 每行一条借阅记录，字段以 | 分隔\n";
-        out << "# 记录号|借阅人|ISBN|借书日|应还日|归还日(-未还)|罚款|是否归还(1/0)\n";
-        for (const BorrowRecord& record : records_.all()) out << record.serialize() << '\n';
-        if (!out) throw std::runtime_error("写入 records.txt 失败");
+        std::ostringstream oss;
+        oss << "# records.txt —— 每行一条借阅记录，字段以 | 分隔\n";
+        oss << "# 记录号|借阅人|ISBN|借书日|应还日|归还日(-未还)|罚款|是否归还(1/0)\n";
+        for (const BorrowRecord& record : records_.all()) oss << record.serialize() << '\n';
+        records_text = oss.str();
     }
+    std::vector<StagedFile> staged; staged.reserve(3);
+    staged.emplace_back(stage(path_of("users.txt"), users_text));
+    staged.emplace_back(stage(path_of("books.txt"), books_text));
+    staged.emplace_back(stage(path_of("records.txt"), records_text));
+
+    commit_all(staged);
 }
 
 bool BorrowManager::empty() const {

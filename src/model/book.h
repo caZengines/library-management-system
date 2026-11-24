@@ -55,7 +55,7 @@ public:
     [[nodiscard]] static std::optional<Book> parse(std::string_view line);
     std::string to_string() const;
 
-    // 【实验6·输入输出流】流运算符重载
+    // 流运算符重载
     friend std::ostream& operator<<(std::ostream& out, const Book& book);
     friend std::istream& operator>>(std::istream& in, Book& book);
 

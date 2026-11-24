@@ -64,7 +64,7 @@ double read_double(const std::string& prompt, double min, double max) {
     }
 }
 
-// 日期输入：复用 Date::parse，失败后循环提示
+// 日期输入：失败后循环提示
 Date read_date(const std::string& prompt) {
     for (;;) {
         const std::string text = read_line(prompt);
